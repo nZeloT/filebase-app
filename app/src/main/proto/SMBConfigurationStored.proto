@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option java_package = "com.nzelot.filebase.data.datastore";
+option java_multiple_files = true;
+
+message SMBConfigurationStored {
+  string address = 1;
+  string workgroup = 2;
+  string username = 3;
+  string password = 4;
+  string share = 5;
+}

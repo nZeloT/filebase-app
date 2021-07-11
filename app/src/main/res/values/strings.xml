@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">File Base</string>
+    <string name="server_configuration">Server Configuration</string>
+    <string name="server_url">Hostname / IP Address</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="sync_now">Sync Now</string>
+    <string name="status">Status</string>
+    <string name="actions">Actions</string>
+    <string name="edit_and_save_server_configuration">Edit and Save Server Configuration</string>
+    <string name="title_activity_main2">MainActivity</string>
+    <!-- Strings used for fragments for navigation -->
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+
+    <string name="server_address">Server Address</string>
+    <string name="confirm_and_save">Confirm and Save</string>
+    <string name="share">Share</string>
+    <string name="last_sync">Last Sync.</string>
+    <string name="edit">Edit</string>
+    <string name="workgroup_domain">Workgroup / Domain</string>
+    <string name="test_connection">Test Connection</string>
+    <string name="test_login">Test Login</string>
+    <string name="title_activity_configuration">ConfigurationActivity</string>
+    <!--
+    This string is used for square devices and overridden by hello_world in
+    values-round/strings.xml for round devices.
+    -->
+    <string name="hello_world">Hello Square World!</string>
+</resources>
