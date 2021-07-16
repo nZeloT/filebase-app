@@ -9,4 +9,5 @@ message SMBConfigurationStored {
   string username = 3;
   string password = 4;
   string share = 5;
+  string start_sync_date = 6;
 }

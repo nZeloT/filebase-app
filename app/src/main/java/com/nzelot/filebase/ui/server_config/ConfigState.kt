@@ -7,4 +7,5 @@ data class ConfigState(
     val isTestCompleted: Boolean = false,
     val testResultMessage: String = "",
     val testResultExplanation: String = "",
+    val isStoreable : Boolean = false
 )
