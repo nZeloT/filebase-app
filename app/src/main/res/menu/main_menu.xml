@@ -9,4 +9,9 @@
             android:id="@+id/actionConfigureServer"
             android:icon="@drawable/ic_edit"
             app:showAsAction="ifRoom"/>
+
+    <item
+        android:title="@string/request_permissions"
+        android:id="@+id/actionRequestPermissions"
+        app:showAsAction="never" />
 </menu>

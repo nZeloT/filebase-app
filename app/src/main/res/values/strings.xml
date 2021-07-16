@@ -27,4 +27,14 @@
     values-round/strings.xml for round devices.
     -->
     <string name="hello_world">Hello Square World!</string>
+    <string name="available">Available</string>
+    <string name="sync_state">Sync. State</string>
+    <string name="first_sync_day">First day to sync.</string>
+
+    <string name="sync_ongoing">Ongoing</string>
+    <string name="sync_done">Done</string>
+
+    <string name="connected">Connected</string>
+    <string name="not_connected">Not Connected</string>
+    <string name="request_permissions">Request Permissions</string>
 </resources>

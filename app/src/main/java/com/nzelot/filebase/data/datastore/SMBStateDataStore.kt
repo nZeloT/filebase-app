@@ -10,17 +10,19 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object ApplicationStateDataStore {
+object SMBStateDataStore {
 
+    @Singleton
     @Provides
     fun provideApplicationStateDataStore(
         @ApplicationContext context: Context
     ) : DataStore<Preferences> =
         PreferenceDataStoreFactory.create(
-            produceFile = { context.dataStoreFile("fileBaseAppState.pref") }
+            produceFile = { context.dataStoreFile("fileBaseAppState.preferences_pb") }
         )
 
 }

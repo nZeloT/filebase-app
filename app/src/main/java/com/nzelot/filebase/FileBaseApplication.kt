@@ -17,19 +17,19 @@ class FileBaseApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
 
-        //Create the upload worker
-        val work = PeriodicWorkRequestBuilder<PeriodicFileCheckWorker>(1, TimeUnit.DAYS)
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.UNMETERED)
-                    .setRequiresCharging(true)
-                    .setRequiresBatteryNotLow(true)
-                    .setRequiresDeviceIdle(true)
-                    .build()
-            )
-            .build()
-        WorkManager.getInstance(this)
-            .enqueueUniquePeriodicWork("UploadFileChecker", ExistingPeriodicWorkPolicy.KEEP, work)
+//        //Create the upload worker
+//        val work = PeriodicWorkRequestBuilder<PeriodicFileCheckWorker>(1, TimeUnit.DAYS)
+//            .setConstraints(
+//                Constraints.Builder()
+//                    .setRequiredNetworkType(NetworkType.UNMETERED)
+//                    .setRequiresCharging(true)
+//                    .setRequiresBatteryNotLow(true)
+//                    .setRequiresDeviceIdle(true)
+//                    .build()
+//            )
+//            .build()
+//        WorkManager.getInstance(this)
+//            .enqueueUniquePeriodicWork("UploadFileChecker", ExistingPeriodicWorkPolicy.KEEP, work)
     }
 
     override fun getWorkManagerConfiguration() : Configuration =

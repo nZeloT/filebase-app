@@ -6,21 +6,15 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import android.widget.Button
-import android.widget.ImageButton
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.WorkRequest
+import androidx.databinding.DataBindingUtil
 import com.nzelot.filebase.R
+import com.nzelot.filebase.databinding.ActivityMainBinding
 import com.nzelot.filebase.ui.server_config.ConfigurationActivity
-import com.nzelot.filebase.worker.SMBTransferWorker
 import dagger.hilt.android.AndroidEntryPoint
-import java.time.format.DateTimeFormatter
 
 private const val TAG = "org.nzelot.filebase.MainActivity"
 
@@ -31,59 +25,27 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
 
-        if (ContextCompat.checkSelfPermission(
-                applicationContext,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            Toast.makeText(applicationContext, "Required Permission Granted!", Toast.LENGTH_SHORT).show()
-        } else {
-            requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 42)
-        }
+        val binding = DataBindingUtil.setContentView<ActivityMainBinding>(this, R.layout.activity_main)
+        binding.lifecycleOwner = this
+        binding.viewModel = viewModel
 
-        val textViewCurrentSMBShareAddress = findViewById<TextView>(R.id.textViewCurrentServerAddressValue)
-        val textViewCurrentSMBUsername = findViewById<TextView>(R.id.textViewCurrentServerUsername)
-        val textViewCurrentLastSync = findViewById<TextView>(R.id.textViewCurrentServerLastSyncValue)
+        requestPermissionOrToast()
 
-        val buttonActionSyncNow = findViewById<Button>(R.id.buttonSyncNow)
-        val buttonRefreshConnectState = findViewById<ImageButton>(R.id.buttonRefreshConnectState)
-        val textViewActionConnected = findViewById<TextView>(R.id.textViewSyncNowConnectedStatus)
-
-        val textViewStatusLog = findViewById<TextView>(R.id.textViewStatusLog)
-
-        val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
-
-        viewModel.actionState.observe(this) {
-            buttonActionSyncNow.isEnabled = it.isServerConnected && !it.isSyncOngoing
-            textViewActionConnected.text = if (it.isServerConnected) {
-                "Connected"
-            } else {
-                "Not Connected"
-            }
-        }
-
-        viewModel.config.observe(this) {
-            textViewCurrentSMBShareAddress.text = it.address
-            textViewCurrentSMBUsername.text = it.username
-            textViewCurrentLastSync.text = it.lastSync.format(dateTimeFormatter)
-        }
-
-        buttonRefreshConnectState.setOnClickListener {
-            when {
-                ContextCompat.checkSelfPermission(
-                    applicationContext,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                ) == PackageManager.PERMISSION_GRANTED -> {
-                    val uploadWorker: WorkRequest = OneTimeWorkRequestBuilder<SMBTransferWorker>().build()
-                    WorkManager.getInstance(applicationContext).enqueue(uploadWorker)
-                }
-                else -> {
-                    Toast.makeText(applicationContext, "Missing required permission!", Toast.LENGTH_LONG).show()
-                }
-            }
-        }
+//        buttonRefreshConnectState.setOnClickListener {
+//            when {
+//                ContextCompat.checkSelfPermission(
+//                    applicationContext,
+//                    Manifest.permission.READ_EXTERNAL_STORAGE
+//                ) == PackageManager.PERMISSION_GRANTED -> {
+//                    val uploadWorker: WorkRequest = OneTimeWorkRequestBuilder<SMBTransferWorker>().build()
+//                    WorkManager.getInstance(applicationContext).enqueue(uploadWorker)
+//                }
+//                else -> {
+//                    Toast.makeText(applicationContext, "Missing required permission!", Toast.LENGTH_LONG).show()
+//                }
+//            }
+//        }
 
     }
 
@@ -99,6 +61,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
             true
         }
+        R.id.actionRequestPermissions -> {
+            requestPermissionOrToast()
+            true
+        }
         else -> {
             super.onOptionsItemSelected(item)
         }
@@ -106,5 +72,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onBackPressed() {
         return
+    }
+
+    private fun requestPermissionOrToast() {
+        if (ContextCompat.checkSelfPermission(
+                applicationContext,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(applicationContext, "Required Permission Granted!", Toast.LENGTH_SHORT).show()
+        } else {
+            requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 42)
+        }
     }
 }

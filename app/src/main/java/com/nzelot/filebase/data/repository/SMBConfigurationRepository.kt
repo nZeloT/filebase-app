@@ -4,7 +4,7 @@ import androidx.datastore.core.DataStore
 import com.nzelot.filebase.data.datastore.SMBConfigurationStored
 import com.nzelot.filebase.data.model.Credentials
 import com.nzelot.filebase.data.model.SMBConfiguration
-import com.nzelot.filebase.ui.main_content.CurrentSMBConfiguration
+import com.nzelot.filebase.data.model.CurrentSMBConfiguration
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import java.time.LocalDateTime
@@ -24,7 +24,6 @@ class SMBConfigurationRepository @Inject constructor(
             return CurrentSMBConfiguration(
                 "\\\\${c.address}\\${c.shareName}",
                 "${c.credentials.domain}\\\\${c.credentials.username}",
-                LocalDateTime.now() //TODO read from application state datastore
             )
         }
 
