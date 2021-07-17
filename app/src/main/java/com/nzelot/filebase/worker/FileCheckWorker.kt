@@ -12,23 +12,41 @@ import com.nzelot.filebase.SMB
 import com.nzelot.filebase.data.model.MediaFile
 import com.nzelot.filebase.data.model.MediaFileType
 import com.nzelot.filebase.data.repository.SMBConfigurationRepository
+import com.nzelot.filebase.data.repository.SMBStateRepository
+import com.nzelot.filebase.data.repository.StatusLogRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 private const val TAG = "org.nzelot.filebase.PeriodicFileCheckWorker"
 
 @HiltWorker
-class PeriodicFileCheckWorker @AssistedInject constructor(
+class FileCheckWorker @AssistedInject constructor(
     @Assisted appContext: Context, @Assisted workerParameters: WorkerParameters,
-    private val smbConfigurationRepository : SMBConfigurationRepository
+    private val smbConfigurationRepository: SMBConfigurationRepository,
+    private val smbStateRepository: SMBStateRepository,
+    private val log: StatusLogRepository
 ) : Worker(appContext, workerParameters) {
 
     override fun doWork(): Result {
+        log.info(TAG, "Starting FileChecker ...")
         if (isSMBShareAvailable()) {
-            val lastSync = getLastSyncDate()
+            log.info(TAG, "Share is available.")
 
+            if(getIsSyncOngoing()){
+                log.info(TAG, "There is a parallel sync ongoing; Stopping this one;")
+                return Result.success()
+            }else{
+                setSyncOngoing(true)
+            }
+
+            val lastSync = getLastSyncDate()
             val newMedia = mutableListOf<MediaFile>()
             newMedia += getNewImagesSince(lastSync)
             newMedia += getNewVideosSince(lastSync)
@@ -36,8 +54,14 @@ class PeriodicFileCheckWorker @AssistedInject constructor(
             val newMediaUris = newMedia.map { it.uri.toString() }.toTypedArray()
             val newMediaMime = newMedia.map { it.mimeType }.toTypedArray()
 
-            Log.i(TAG, "Scheduling ${newMedia.size} new Files for Upload. Last Sync Time is now ${LocalDateTime.now()}")
-            //TODO write LocalDateTime.now() back into storage
+            val zdt = ZonedDateTime.now(ZoneId.systemDefault())
+            log.info(TAG, "Scheduling ${newMedia.size} new Files for Upload. Last Sync Time is now ${
+                zdt.format(
+                    DateTimeFormatter.ISO_INSTANT
+                )
+            }")
+
+            smbStateRepository.updateLastSyncDate(zdt)
 
             if (newMedia.isNotEmpty()) {
                 val inputData = Data.Builder()
@@ -55,8 +79,13 @@ class PeriodicFileCheckWorker @AssistedInject constructor(
                     .setConstraints(constraints)
                     .build()
 
+                log.info(TAG, "Upload request submitted.")
                 WorkManager.getInstance(applicationContext).enqueue(worker)
             }
+
+            setSyncOngoing(false)
+        }else{
+            log.error(TAG, "Share is not available; Quitting;")
         }
 
         return Result.success()
@@ -70,12 +99,23 @@ class PeriodicFileCheckWorker @AssistedInject constructor(
         }
     }
 
-    private fun getLastSyncDate(): LocalDateTime {
-        //TODO read last sync time from storage
-        return LocalDateTime.of(2021, 6, 1, 0, 0)
+    private fun getLastSyncDate(): ZonedDateTime {
+        return runBlocking {
+            smbStateRepository.lastSyncDate.first()
+        }
     }
 
-    private fun getNewImagesSince(dt: LocalDateTime): List<MediaFile> {
+    private fun getIsSyncOngoing() : Boolean {
+        return runBlocking {
+            smbStateRepository.isSyncOngoing.first()
+        }
+    }
+
+    private fun setSyncOngoing(isOngoing : Boolean) {
+        smbStateRepository.updateIsSyncOngoing(isOngoing)
+    }
+
+    private fun getNewImagesSince(dt: ZonedDateTime): List<MediaFile> {
         val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
@@ -86,7 +126,7 @@ class PeriodicFileCheckWorker @AssistedInject constructor(
 
         val selection = "${MediaStore.Images.Media.DATE_MODIFIED} >= ?"
         val selectionArgs = arrayOf(
-            dt.toEpochSecond(ZoneOffset.UTC).toString()
+            dt.toEpochSecond().toString()
         )
 
         val query = applicationContext.contentResolver.query(
@@ -97,10 +137,17 @@ class PeriodicFileCheckWorker @AssistedInject constructor(
             null
         )
 
-        return queryMedia(query, MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME, MediaStore.Images.Media.DATE_MODIFIED, MediaStore.Images.Media.MIME_TYPE, MediaFileType.IMAGE)
+        return queryMedia(
+            query,
+            MediaStore.Images.Media._ID,
+            MediaStore.Images.Media.DISPLAY_NAME,
+            MediaStore.Images.Media.DATE_MODIFIED,
+            MediaStore.Images.Media.MIME_TYPE,
+            MediaFileType.IMAGE
+        )
     }
 
-    private fun getNewVideosSince(dt: LocalDateTime): List<MediaFile> {
+    private fun getNewVideosSince(dt: ZonedDateTime): List<MediaFile> {
         val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(
             MediaStore.Video.Media._ID,
@@ -109,7 +156,7 @@ class PeriodicFileCheckWorker @AssistedInject constructor(
         )
         val selection = "${MediaStore.Video.Media.DATE_MODIFIED} >= ?"
         val selectionArgs = arrayOf(
-            dt.toEpochSecond(ZoneOffset.UTC).toString()
+            dt.toEpochSecond().toString()
         )
         val query = applicationContext.contentResolver.query(
             collection,
@@ -118,10 +165,24 @@ class PeriodicFileCheckWorker @AssistedInject constructor(
             selectionArgs,
             null
         )
-        return queryMedia(query, MediaStore.Video.Media._ID, MediaStore.Video.Media.DISPLAY_NAME, MediaStore.Video.Media.DATE_MODIFIED, MediaStore.Video.Media.MIME_TYPE, MediaFileType.VIDEO)
+        return queryMedia(
+            query,
+            MediaStore.Video.Media._ID,
+            MediaStore.Video.Media.DISPLAY_NAME,
+            MediaStore.Video.Media.DATE_MODIFIED,
+            MediaStore.Video.Media.MIME_TYPE,
+            MediaFileType.VIDEO
+        )
     }
 
-    private fun queryMedia(query: Cursor?, idCol : String, nameCol : String, dateModCol : String, mimeCol: String, fileType : MediaFileType) : List<MediaFile> {
+    private fun queryMedia(
+        query: Cursor?,
+        idCol: String,
+        nameCol: String,
+        dateModCol: String,
+        mimeCol: String,
+        fileType: MediaFileType
+    ): List<MediaFile> {
         val mediaList = mutableListOf<MediaFile>()
 
         query?.use { cursor ->
@@ -130,14 +191,15 @@ class PeriodicFileCheckWorker @AssistedInject constructor(
             val dateModColumn = cursor.getColumnIndexOrThrow(dateModCol)
             val mimColumn = cursor.getColumnIndexOrThrow(mimeCol)
 
-            while(cursor.moveToNext()) {
+            while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
                 val name = cursor.getString(nameColumn)
                 val mimType = cursor.getString(mimColumn)
                 val dateMod = LocalDateTime.ofEpochSecond(
-                    cursor.getInt(dateModColumn).toLong(), 0, ZoneOffset.UTC)
+                    cursor.getInt(dateModColumn).toLong(), 0, ZoneOffset.UTC
+                )
 
-                val contentUri : Uri = ContentUris.withAppendedId(
+                val contentUri: Uri = ContentUris.withAppendedId(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     id
                 )

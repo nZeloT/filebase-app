@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layout xmlns:android="http://schemas.android.com/apk/res/android">
+<layout xmlns:tools="http://schemas.android.com/tools"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:android="http://schemas.android.com/apk/res/android">
     <data>
         <variable
                 name="viewModel"
@@ -7,8 +9,6 @@
     </data>
 
     <androidx.constraintlayout.widget.ConstraintLayout
-            xmlns:tools="http://schemas.android.com/tools"
-            xmlns:app="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             tools:context=".ui.main_content.MainActivity">
@@ -73,9 +73,20 @@
                     android:layout_height="wrap_content"
                     android:id="@+id/buttonSyncNow"
                     android:layout_width="150dp"
-                    android:enabled="@{viewModel.state.shareAvailable &amp;&amp; !viewModel.state.syncOngoing}"
-                    android:onClick="@{() -> viewModel.startSyncNow()}"
+                    android:enabled="@{viewModel.isShareAvailable() &amp;&amp; !viewModel.isSyncOngoing()}"
                     />
+
+            <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"/>
+
+            <Button
+                    android:text="@string/check_avail"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/buttonRefreshShareAvailable"
+                    android:layout_weight="1"/>
 
         </LinearLayout>
 
@@ -123,6 +134,7 @@
                         android:layout_height="match_parent"
                         android:id="@+id/textViewStatusLog"
                         tools:text="Status Log"
+                        android:text="@{viewModel.statusLog}"
                         android:textAppearance="@style/TextAppearance.AppCompat.Small"
                         android:fontFamily="serif-monospace"
                         android:textSize="12sp"
@@ -202,7 +214,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:id="@+id/textViewCurrentServerAvailable"
-                android:text="@{viewModel.state.shareAvailable ? @string/connected : @string/not_connected}"
+                android:text="@{viewModel.isShareAvailable() ? @string/connected : @string/not_connected}"
                 android:textAppearance="@style/MonospaceText"
                 android:gravity="end"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -216,7 +228,7 @@
                 android:layout_height="wrap_content"
                 android:id="@+id/textViewCurrentServerSyncState"
                 android:textAppearance="@style/MonospaceText"
-                android:text="@{viewModel.state.syncOngoing ? @string/sync_ongoing : @string/sync_done}"
+                android:text="@{viewModel.isSyncOngoing() ? @string/sync_ongoing : @string/sync_done}"
                 android:gravity="end"
                 app:layout_constraintEnd_toEndOf="parent"
                 android:layout_marginEnd="16dp"

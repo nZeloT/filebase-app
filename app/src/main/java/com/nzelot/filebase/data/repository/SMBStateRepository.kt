@@ -5,8 +5,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
-import com.nzelot.filebase.data.model.CurrentSMBState
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import java.time.Instant
 import java.time.ZoneId
@@ -18,13 +19,16 @@ class SMBStateRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>
 ) {
 
-    private val _pref: Preferences
-        get() = readStoredPreferences()
+    private val _pref: Flow<Preferences> = dataStore.data
 
-    val state : CurrentSMBState
-        get() = CurrentSMBState(readIsSyncOngoing(), readIsShareAvailable(), readLastSyncDate())
+    val lastSyncDate =
+        _pref.map { ZonedDateTime.ofInstant(Instant.ofEpochSecond(it[LAST_SYNC_DATE] ?: 0), ZoneId.systemDefault()) }
 
-    fun updateIsSyncOngoing(ongoing : Boolean) {
+    val isSyncOngoing = _pref.map { it[SYNC_ONGOING] ?: false }
+
+    val isShareAvailable = _pref.map { it[SHARE_AVAILABLE] ?: false }
+
+    fun updateIsSyncOngoing(ongoing: Boolean) {
         runBlocking {
             dataStore.edit {
                 it[SYNC_ONGOING] = ongoing
@@ -32,7 +36,7 @@ class SMBStateRepository @Inject constructor(
         }
     }
 
-    fun updateLastSyncDate(zdt : ZonedDateTime = ZonedDateTime.now()) {
+    fun updateLastSyncDate(zdt: ZonedDateTime = ZonedDateTime.now()) {
         runBlocking {
             dataStore.edit {
                 it[LAST_SYNC_DATE] = zdt.toEpochSecond()
@@ -40,22 +44,11 @@ class SMBStateRepository @Inject constructor(
         }
     }
 
-    private fun readLastSyncDate() : ZonedDateTime {
-        val epochTime = _pref[LAST_SYNC_DATE] ?: 0
-        return ZonedDateTime.ofInstant(Instant.ofEpochSecond(epochTime), ZoneId.systemDefault())!!
-    }
-
-    private fun readIsSyncOngoing() : Boolean {
-        return _pref[SYNC_ONGOING] ?: false
-    }
-
-    private fun readIsShareAvailable() : Boolean {
-        return _pref[SHARE_AVAILABLE] ?: false
-    }
-
-    private fun readStoredPreferences(): Preferences {
-        return runBlocking {
-            dataStore.data.first()
+    fun updateShareAvailable(newState : Boolean) {
+        runBlocking {
+            dataStore.edit {
+                it[SHARE_AVAILABLE] = newState
+            }
         }
     }
 

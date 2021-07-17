@@ -1,5 +1,6 @@
 package com.nzelot.filebase
 
+import android.util.Log
 import com.hierynomus.mssmb2.SMBApiException
 import com.hierynomus.security.bc.BCSecurityProvider
 import com.hierynomus.smbj.SMBClient
@@ -15,6 +16,8 @@ import com.nzelot.filebase.data.model.SMBConfiguration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+
+private const val TAG = "com.nzelot.filebase.SMB"
 
 object SMB {
 
@@ -39,13 +42,19 @@ object SMB {
         val client = SMBClient(smbConf)
         var result: Result<T>
 
+        Log.d(TAG, "Using smb '${config.address}' with user '${config.credentials.domain}\\${config.credentials.username}' on share '${config.shareName}'")
+
         var connection: Connection? = null
         var session: Session? = null
         var share: DiskShare? = null
         try {
+            Log.d(TAG, "Connecting to smb ...")
             connection = client.connect(config.address)
+            Log.d(TAG, "Creating session on smb ...")
             session = connection.authenticate(AuthenticationContext(creds.username, creds.password, creds.domain))
+            Log.d(TAG, "Loading share ...")
             share = session.connectShare(config.shareName) as DiskShare
+            Log.d(TAG, "Connected Successfully")
 
             result = block(share)
 

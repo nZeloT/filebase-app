@@ -1,4 +1,4 @@
-package com.nzelot.filebase.data.datastore
+package com.nzelot.filebase.data.storage
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -18,7 +18,7 @@ object SMBStateDataStore {
 
     @Singleton
     @Provides
-    fun provideApplicationStateDataStore(
+    fun provideSMBStateDataStore(
         @ApplicationContext context: Context
     ) : DataStore<Preferences> =
         PreferenceDataStoreFactory.create(

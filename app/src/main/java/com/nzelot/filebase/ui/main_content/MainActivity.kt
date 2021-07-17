@@ -4,16 +4,21 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.Button
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.nzelot.filebase.R
 import com.nzelot.filebase.databinding.ActivityMainBinding
 import com.nzelot.filebase.ui.server_config.ConfigurationActivity
+import com.nzelot.filebase.worker.FileCheckWorker
 import dagger.hilt.android.AndroidEntryPoint
 
 private const val TAG = "org.nzelot.filebase.MainActivity"
@@ -30,23 +35,26 @@ class MainActivity : AppCompatActivity() {
         binding.lifecycleOwner = this
         binding.viewModel = viewModel
 
-        requestPermissionOrToast()
+        val btnSyncNow = findViewById<Button>(R.id.buttonSyncNow)
+        btnSyncNow.setOnClickListener {
+            startSyncNow()
+        }
 
-//        buttonRefreshConnectState.setOnClickListener {
-//            when {
-//                ContextCompat.checkSelfPermission(
-//                    applicationContext,
-//                    Manifest.permission.READ_EXTERNAL_STORAGE
-//                ) == PackageManager.PERMISSION_GRANTED -> {
-//                    val uploadWorker: WorkRequest = OneTimeWorkRequestBuilder<SMBTransferWorker>().build()
-//                    WorkManager.getInstance(applicationContext).enqueue(uploadWorker)
-//                }
-//                else -> {
-//                    Toast.makeText(applicationContext, "Missing required permission!", Toast.LENGTH_LONG).show()
-//                }
-//            }
-//        }
+        val btnCheckShareAvail = findViewById<Button>(R.id.buttonRefreshShareAvailable)
+        btnCheckShareAvail.setOnClickListener{
+            checkShareAvailable()
+        }
 
+        requestPermissionOrDo()
+    }
+
+    private fun startSyncNow() {
+        Log.d(TAG, "Sync triggered")
+        requestPermissionOrDo(this::launchSyncOnce)
+    }
+
+    private fun checkShareAvailable() {
+        viewModel.checkShareAvailability()
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -62,7 +70,7 @@ class MainActivity : AppCompatActivity() {
             true
         }
         R.id.actionRequestPermissions -> {
-            requestPermissionOrToast()
+            requestPermissionOrDo()
             true
         }
         else -> {
@@ -74,15 +82,29 @@ class MainActivity : AppCompatActivity() {
         return
     }
 
-    private fun requestPermissionOrToast() {
+    private fun requestPermissionOrDo(
+        cb: () -> Unit = {
+            Toast.makeText(
+                applicationContext,
+                "Required Permission Granted!",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    ) {
         if (ContextCompat.checkSelfPermission(
                 applicationContext,
                 Manifest.permission.READ_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            Toast.makeText(applicationContext, "Required Permission Granted!", Toast.LENGTH_SHORT).show()
+            cb()
         } else {
             requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 42)
         }
+    }
+
+    private fun launchSyncOnce() {
+        Log.d(TAG, "Enqueueing FileCheckWorker")
+        val work = OneTimeWorkRequestBuilder<FileCheckWorker>().build()
+        WorkManager.getInstance(applicationContext).enqueue(work)
     }
 }

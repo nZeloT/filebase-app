@@ -3,9 +3,7 @@ package com.nzelot.filebase
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.*
-import com.nzelot.filebase.worker.PeriodicFileCheckWorker
 import dagger.hilt.android.HiltAndroidApp
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 
@@ -39,7 +37,6 @@ class FileBaseApplication : Application(), Configuration.Provider {
 }
 
 //TODO: initially enter config page on application first start
-//TODO: Store Last Update time
 //TODO: Enable sync now functionality
 //TODO: Enable auto update of connected state
 //TODO: Stop and restart update worker on config change

@@ -1,4 +1,4 @@
-package com.nzelot.filebase.data.datastore
+package com.nzelot.filebase.data.storage
 
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer

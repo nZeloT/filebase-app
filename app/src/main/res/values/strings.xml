@@ -37,4 +37,5 @@
     <string name="connected">Connected</string>
     <string name="not_connected">Not Connected</string>
     <string name="request_permissions">Request Permissions</string>
+    <string name="check_avail">Check Avail.</string>
 </resources>

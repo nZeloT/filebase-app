@@ -2,13 +2,12 @@ package com.nzelot.filebase.data.repository
 
 import android.util.Log
 import androidx.datastore.core.DataStore
-import com.nzelot.filebase.data.datastore.SMBConfigurationStored
+import com.nzelot.filebase.data.storage.SMBConfigurationStored
 import com.nzelot.filebase.data.model.Credentials
 import com.nzelot.filebase.data.model.SMBConfiguration
 import com.nzelot.filebase.data.model.CurrentSMBConfiguration
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 

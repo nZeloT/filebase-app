@@ -13,6 +13,7 @@ import com.nzelot.filebase.BuildConfig
 import com.nzelot.filebase.SMB
 import com.nzelot.filebase.data.model.SMBConfiguration
 import com.nzelot.filebase.data.repository.SMBConfigurationRepository
+import com.nzelot.filebase.data.repository.StatusLogRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.io.IOException
@@ -32,26 +33,29 @@ const val INPUT_UPLOAD_ATTEMPT = "INPUT_UPLOAD_ATTEMPT"
 @HiltWorker
 class SMBTransferWorker @AssistedInject constructor(
     @Assisted appContext: Context, @Assisted workerParameters: WorkerParameters,
-    private val smbConfigurationRepository: SMBConfigurationRepository
+    private val smbConfigurationRepository: SMBConfigurationRepository,
+    private val log : StatusLogRepository
 ) : Worker(appContext, workerParameters){
 
     override fun doWork(): Result {
+        log.info(TAG, "Starting Upload ...")
         val urisToUpload = inputData.getStringArray(INPUT_URI_ARR)!!
         val mimeToUpload = inputData.getStringArray(INPUT_MIME_VAL)!!
         val uploadAttempt = inputData.getInt(INPUT_UPLOAD_ATTEMPT, 0)
 
         if (BuildConfig.DEBUG && urisToUpload.size != mimeToUpload.size) {
+            log.error(TAG, "Mismatch between Uris and MimeType!!")
             error("Mismatch between Uris and MimeType!")
         }
 
 
-        Log.i(TAG, "Received ${urisToUpload.size} new Files to upload to smb share; Queued for attempt $uploadAttempt")
+        log.info(TAG, "Received ${urisToUpload.size} new Files to upload to smb share; Queued for attempt $uploadAttempt")
 
         var lastSuccessfulIdx = -1
 
         val smbShareConfig = getShareConfiguration()
         val uploadState = SMB.doOnShare(smbShareConfig) { diskShare ->
-            Log.i(TAG, "Connected to share. Starting upload ...")
+            log.info(TAG, "Connected to share. Starting upload ...")
 
             //check that destination directory exists
             if(!diskShare.folderExists(FILE_BASE_ROOT)){
@@ -66,7 +70,7 @@ class SMBTransferWorker @AssistedInject constructor(
                         r.data
                     }
                     is com.nzelot.filebase.data.Result.Error -> {
-                        Log.e(TAG, "Received a read error on local file; will skip; error => ${r.exception.message}")
+                        log.error(TAG, "Received a read error on local file; will skip;", r.exception)
                         ++lastSuccessfulIdx
                         continue
                     }
@@ -75,11 +79,15 @@ class SMBTransferWorker @AssistedInject constructor(
                 //1.5 derive file ending from mime-type
                 //    expecting mime types like 'image/jpeg' or 'image/png' or 'video/mp4'
                 val mimeType = mimeToUpload[item]
+                Log.d(TAG, "Received Mime-Type of $mimeType")
+
                 val fileCategory = mimeType.split('/')[0]
                 val fileEnding = ".${mimeType.split('/')[1]}"
                 val timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_INSTANT)
                 val fileName = "${fileCategory}_${timestamp}.$fileEnding"
                 val smbFilePath = "$FILE_BASE_ROOT\\$fileName"
+
+                log.info(TAG, "Uploading file to $smbFilePath")
 
                 //2. create remote file
                 val smbFile = diskShare.openFile(
@@ -98,16 +106,15 @@ class SMBTransferWorker @AssistedInject constructor(
                 ++lastSuccessfulIdx
             }
 
-            Log.i(TAG, "Finished Upload work. Disconnecting from share")
             com.nzelot.filebase.data.Result.Success(true)
         }
 
         when (uploadState) {
             is com.nzelot.filebase.data.Result.Success<Boolean> -> {
-                Log.i(TAG, "Successfully finished Uploading")
+                log.info(TAG, "Successfully finished Uploading")
             }
             is com.nzelot.filebase.data.Result.Error -> {
-                Log.e(TAG, "An error occurred during upload! -> ${uploadState.exception.message}")
+                log.error(TAG, "An error occurred during upload!", uploadState.exception)
 
                 //we missed some files; reschedule the missed ones
                 val missedUris =
@@ -134,16 +141,12 @@ class SMBTransferWorker @AssistedInject constructor(
                     .setInitialDelay(1, TimeUnit.HOURS)
                     .build()
 
-                Log.i(
-                    TAG,
-                    "Missed to upload ${missedUris.size} of initially ${urisToUpload.size}; Requeueing with for attempt $nextUploadAttempt"
-                )
-
+                log.info(TAG, "Missed to upload ${missedUris.size} of initially ${urisToUpload.size}; Requeueing with for attempt $nextUploadAttempt")
                 WorkManager.getInstance(applicationContext).enqueue(work)
             }
         }
 
-        Log.i(TAG, "Closing Upload Worker")
+        log.info(TAG, "Closing upload worker")
         return Result.success()
     }
 
