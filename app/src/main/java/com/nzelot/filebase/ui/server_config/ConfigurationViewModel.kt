@@ -5,13 +5,15 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nzelot.filebase.SMB
 import com.nzelot.filebase.data.Result
 import com.nzelot.filebase.data.model.Credentials
 import com.nzelot.filebase.data.model.SMBConfiguration
-import com.nzelot.filebase.SMB
 import com.nzelot.filebase.data.repository.SMBConfigurationRepository
 import com.nzelot.filebase.data.repository.SMBStateRepository
+import com.nzelot.filebase.data.repository.StatusLogRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -23,7 +25,8 @@ private const val TAG = "org.nzelot.filebase.ServerConfigViewModel"
 @HiltViewModel
 class ConfigurationViewModel @Inject constructor(
     private val smbConfigurationRepository: SMBConfigurationRepository,
-    private val smbStateRepository: SMBStateRepository
+    private val smbStateRepository: SMBStateRepository,
+    private val log : StatusLogRepository
 ) : ViewModel() {
     private val _state = MutableLiveData<ConfigState>()
     val state: LiveData<ConfigState> = _state
@@ -130,6 +133,11 @@ class ConfigurationViewModel @Inject constructor(
             syncStart.value!!
         )
         smbStateRepository.updateLastSyncDate(syncStart.value!!)
+        smbStateRepository.updateShareAvailable(false)
+        smbStateRepository.updateIsSyncOngoing(false)
+        viewModelScope.launch(Dispatchers.IO) {
+            log.clear()
+        }
     }
 
     private fun isTestable(): Boolean {

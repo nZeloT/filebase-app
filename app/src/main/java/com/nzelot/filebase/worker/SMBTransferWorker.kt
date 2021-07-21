@@ -27,8 +27,9 @@ private const val TAG = "org.nzelot.filebase.SMBTransferWorker"
 private const val FILE_BASE_ROOT = ".filebase"
 
 const val INPUT_URI_ARR = "INPUT_URIS"
-const val INPUT_MIME_VAL = "INPUT_MIME"
+const val INPUT_NAME_VAL = "INPUT_MIME"
 const val INPUT_UPLOAD_ATTEMPT = "INPUT_UPLOAD_ATTEMPT"
+
 
 @HiltWorker
 class SMBTransferWorker @AssistedInject constructor(
@@ -40,16 +41,17 @@ class SMBTransferWorker @AssistedInject constructor(
     override fun doWork(): Result {
         log.info(TAG, "Starting Upload ...")
         val urisToUpload = inputData.getStringArray(INPUT_URI_ARR)!!
-        val mimeToUpload = inputData.getStringArray(INPUT_MIME_VAL)!!
+        val nameToUpload = inputData.getStringArray(INPUT_NAME_VAL)!!
         val uploadAttempt = inputData.getInt(INPUT_UPLOAD_ATTEMPT, 0)
 
-        if (BuildConfig.DEBUG && urisToUpload.size != mimeToUpload.size) {
+        if (BuildConfig.DEBUG && urisToUpload.size != nameToUpload.size) {
             log.error(TAG, "Mismatch between Uris and MimeType!!")
             error("Mismatch between Uris and MimeType!")
         }
 
 
-        log.info(TAG, "Received ${urisToUpload.size} new Files to upload to smb share; Queued for attempt $uploadAttempt")
+        log.info(TAG, "Received ${urisToUpload.size} new Files to upload;")
+        log.info(TAG, "Queued for attempt $uploadAttempt")
 
         var lastSuccessfulIdx = -1
 
@@ -76,15 +78,8 @@ class SMBTransferWorker @AssistedInject constructor(
                     }
                 }
 
-                //1.5 derive file ending from mime-type
-                //    expecting mime types like 'image/jpeg' or 'image/png' or 'video/mp4'
-                val mimeType = mimeToUpload[item]
-                Log.d(TAG, "Received Mime-Type of $mimeType")
-
-                val fileCategory = mimeType.split('/')[0]
-                val fileEnding = ".${mimeType.split('/')[1]}"
-                val timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_INSTANT)
-                val fileName = "${fileCategory}_${timestamp}.$fileEnding"
+                //1.5 derive file name
+                val fileName = nameToUpload[item]
                 val smbFilePath = "$FILE_BASE_ROOT\\$fileName"
 
                 log.info(TAG, "Uploading file to $smbFilePath")
@@ -111,7 +106,7 @@ class SMBTransferWorker @AssistedInject constructor(
 
         when (uploadState) {
             is com.nzelot.filebase.data.Result.Success<Boolean> -> {
-                log.info(TAG, "Successfully finished Uploading")
+                log.info(TAG, "Successfully uploaded ${urisToUpload.size} files")
             }
             is com.nzelot.filebase.data.Result.Error -> {
                 log.error(TAG, "An error occurred during upload!", uploadState.exception)
@@ -120,25 +115,25 @@ class SMBTransferWorker @AssistedInject constructor(
                 val missedUris =
                     urisToUpload.slice(IntRange(lastSuccessfulIdx + 1, urisToUpload.size - 1)).toTypedArray()
                 val missedMime =
-                    mimeToUpload.slice(IntRange(lastSuccessfulIdx + 1, mimeToUpload.size - 1)).toTypedArray()
+                    nameToUpload.slice(IntRange(lastSuccessfulIdx + 1, nameToUpload.size - 1)).toTypedArray()
                 val nextUploadAttempt = uploadAttempt + 1
 
                 val inputData = Data.Builder()
                     .putStringArray(INPUT_URI_ARR, missedUris)
-                    .putStringArray(INPUT_MIME_VAL, missedMime)
+                    .putStringArray(INPUT_NAME_VAL, missedMime)
                     .putInt(INPUT_UPLOAD_ATTEMPT, nextUploadAttempt)
                     .build()
 
                 val constraints = Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.UNMETERED)
                     .setRequiresCharging(true)
-                    .setRequiresDeviceIdle(true)
                     .build()
 
                 val work = OneTimeWorkRequestBuilder<SMBTransferWorker>()
                     .setInputData(inputData)
                     .setConstraints(constraints)
                     .setInitialDelay(1, TimeUnit.HOURS)
+                    .addTag(UPLOAD_TAG)
                     .build()
 
                 log.info(TAG, "Missed to upload ${missedUris.size} of initially ${urisToUpload.size}; Requeueing with for attempt $nextUploadAttempt")
@@ -170,5 +165,8 @@ class SMBTransferWorker @AssistedInject constructor(
         return smbConfigurationRepository.config
     }
 
+    companion object{
+        val UPLOAD_TAG = "FilebaseUploadWork"
+    }
 
 }

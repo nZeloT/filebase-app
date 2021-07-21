@@ -52,10 +52,11 @@ class FileCheckWorker @AssistedInject constructor(
             newMedia += getNewVideosSince(lastSync)
 
             val newMediaUris = newMedia.map { it.uri.toString() }.toTypedArray()
-            val newMediaMime = newMedia.map { it.mimeType }.toTypedArray()
+            val newMediaName = newMedia.map { it.name }.toTypedArray()
 
             val zdt = ZonedDateTime.now(ZoneId.systemDefault())
-            log.info(TAG, "Scheduling ${newMedia.size} new Files for Upload. Last Sync Time is now ${
+            log.info(TAG, "Scheduling ${newMedia.size} new Files for Upload.")
+            log.info(TAG,  "Last Sync Time is now ${
                 zdt.format(
                     DateTimeFormatter.ISO_INSTANT
                 )
@@ -66,20 +67,22 @@ class FileCheckWorker @AssistedInject constructor(
             if (newMedia.isNotEmpty()) {
                 val inputData = Data.Builder()
                     .putStringArray(INPUT_URI_ARR, newMediaUris)
-                    .putStringArray(INPUT_MIME_VAL, newMediaMime)
+                    .putStringArray(INPUT_NAME_VAL, newMediaName)
                     .putInt(INPUT_UPLOAD_ATTEMPT, 0)
                     .build()
+
                 val constraints = Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.UNMETERED)
                     .setRequiresCharging(true)
-                    .setRequiresDeviceIdle(true)
                     .build()
+
                 val worker = OneTimeWorkRequestBuilder<SMBTransferWorker>()
                     .setInputData(inputData)
                     .setConstraints(constraints)
+                    .addTag(SMBTransferWorker.UPLOAD_TAG)
                     .build()
 
-                log.info(TAG, "Upload request submitted.")
+                log.info(TAG, "Upload requested for ${newMediaUris.size} files.")
                 WorkManager.getInstance(applicationContext).enqueue(worker)
             }
 
@@ -121,7 +124,6 @@ class FileCheckWorker @AssistedInject constructor(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.DATE_MODIFIED,
-            MediaStore.Images.Media.MIME_TYPE
         )
 
         val selection = "${MediaStore.Images.Media.DATE_MODIFIED} >= ?"
@@ -142,7 +144,6 @@ class FileCheckWorker @AssistedInject constructor(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.DATE_MODIFIED,
-            MediaStore.Images.Media.MIME_TYPE,
             MediaFileType.IMAGE
         )
     }
@@ -152,7 +153,7 @@ class FileCheckWorker @AssistedInject constructor(
         val projection = arrayOf(
             MediaStore.Video.Media._ID,
             MediaStore.Video.Media.DISPLAY_NAME,
-            MediaStore.Video.Media.DATE_MODIFIED
+            MediaStore.Video.Media.DATE_MODIFIED,
         )
         val selection = "${MediaStore.Video.Media.DATE_MODIFIED} >= ?"
         val selectionArgs = arrayOf(
@@ -170,7 +171,6 @@ class FileCheckWorker @AssistedInject constructor(
             MediaStore.Video.Media._ID,
             MediaStore.Video.Media.DISPLAY_NAME,
             MediaStore.Video.Media.DATE_MODIFIED,
-            MediaStore.Video.Media.MIME_TYPE,
             MediaFileType.VIDEO
         )
     }
@@ -180,7 +180,6 @@ class FileCheckWorker @AssistedInject constructor(
         idCol: String,
         nameCol: String,
         dateModCol: String,
-        mimeCol: String,
         fileType: MediaFileType
     ): List<MediaFile> {
         val mediaList = mutableListOf<MediaFile>()
@@ -189,12 +188,10 @@ class FileCheckWorker @AssistedInject constructor(
             val idColumn = cursor.getColumnIndexOrThrow(idCol)
             val nameColumn = cursor.getColumnIndexOrThrow(nameCol)
             val dateModColumn = cursor.getColumnIndexOrThrow(dateModCol)
-            val mimColumn = cursor.getColumnIndexOrThrow(mimeCol)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
                 val name = cursor.getString(nameColumn)
-                val mimType = cursor.getString(mimColumn)
                 val dateMod = LocalDateTime.ofEpochSecond(
                     cursor.getInt(dateModColumn).toLong(), 0, ZoneOffset.UTC
                 )
@@ -204,12 +201,16 @@ class FileCheckWorker @AssistedInject constructor(
                     id
                 )
 
-                val file = MediaFile(contentUri, id, name, dateMod, fileType, mimType)
+                val file = MediaFile(contentUri, id, name, dateMod, fileType)
                 mediaList += file
                 Log.d(TAG, "Found new Media File $file")
             }
         }
 
         return mediaList
+    }
+
+    companion object {
+        const val CHECKER_TAG = "FilebaseFileChecker"
     }
 }

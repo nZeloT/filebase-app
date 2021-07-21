@@ -11,10 +11,13 @@ import java.time.ZonedDateTime
 @Dao
 interface StatusLogDao {
 
-    @Query("SELECT * from status_log WHERE tmstp > :startingFrom")
+    @Query("SELECT * from status_log WHERE tmstp > :startingFrom ORDER BY id DESC")
     fun getStatusLogs(startingFrom : Long = (ZonedDateTime.now() - Duration.ofHours(24)).toEpochSecond()) : Flow<List<StatusLogEntry>>
 
     @Insert
     fun insertAll(vararg entries : StatusLogEntry)
+
+    @Query("DELETE from status_log")
+    fun clearLogs()
 
 }

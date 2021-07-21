@@ -9,5 +9,4 @@ data class MediaFile(
     val name: String,
     val changedOn: LocalDateTime,
     val fileType: MediaFileType,
-    val mimeType: String
 )

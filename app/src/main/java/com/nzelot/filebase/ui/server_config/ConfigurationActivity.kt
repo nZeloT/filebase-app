@@ -17,8 +17,11 @@ import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.MutableLiveData
+import androidx.work.*
 import com.nzelot.filebase.R
 import com.nzelot.filebase.ui.main_content.MainActivity
+import com.nzelot.filebase.worker.FileCheckWorker
+import com.nzelot.filebase.worker.SMBTransferWorker
 import dagger.hilt.android.AndroidEntryPoint
 import java.lang.ClassCastException
 import java.lang.IllegalStateException
@@ -26,13 +29,14 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.TimeUnit
 
 private const val TAG = "org.nzelot.filebase.ConfigurationActivity"
 
 @AndroidEntryPoint
 class ConfigurationActivity : AppCompatActivity(), DatePickingDialog.OnValueSetListener {
 
-    private val viewModel : ConfigurationViewModel by viewModels()
+    private val viewModel: ConfigurationViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,14 +45,15 @@ class ConfigurationActivity : AppCompatActivity(), DatePickingDialog.OnValueSetL
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         val editTextHostName = findViewById<EditText>(R.id.editTextServerAddress)
-        val editTextUsername  = findViewById<EditText>(R.id.editTextUsername)
+        val editTextUsername = findViewById<EditText>(R.id.editTextUsername)
         val editTextWorkgroup = findViewById<EditText>(R.id.editTextWorkgroup)
         val editTextPassword = findViewById<EditText>(R.id.editTextPassword)
         val editTextShareName = findViewById<EditText>(R.id.editTextShareName)
         val textViewStartSyncDate = findViewById<TextView>(R.id.textViewStartSyncDate)
         val buttonTestConnection = findViewById<Button>(R.id.buttonTestServerConnection)
         val textTestResult = findViewById<TextView>(R.id.textViewTestServerConnectionResult)
-        val textTestResultExplain = findViewById<TextView>(R.id.textViewTestServerConnectionErrorExplanation)
+        val textTestResultExplain =
+            findViewById<TextView>(R.id.textViewTestServerConnectionErrorExplanation)
         val buttonSave = findViewById<Button>(R.id.buttonSaveConfiguration)
 
         viewModel.state.observe(this) {
@@ -79,16 +84,21 @@ class ConfigurationActivity : AppCompatActivity(), DatePickingDialog.OnValueSetL
         }
 
         buttonSave.setOnClickListener {
+            Log.i(TAG, "Stopping all current background worker.")
+            stopPeriodicFileChecker()
             viewModel.storeConfig()
+            Log.i(TAG, "Rescheduling background worker")
+            startPeriodicFileChecker()
+
             val intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
             finish()
         }
 
-        initFieldWith("Hostname", viewModel.hostname.value!!, R.string.server_url, editTextHostName)
-        initFieldWith("Workgroup", viewModel.workgroup.value!!, R.string.workgroup_domain, editTextWorkgroup)
-        initFieldWith("Username", viewModel.username.value!!, R.string.username, editTextUsername)
-        initFieldWith("Sharename", viewModel.shareName.value!!, R.string.share, editTextShareName)
+        initFieldWith("Hostname", viewModel.hostname.value!!, editTextHostName)
+        initFieldWith("Workgroup", viewModel.workgroup.value!!, editTextWorkgroup)
+        initFieldWith("Username", viewModel.username.value!!, editTextUsername)
+        initFieldWith("Sharename", viewModel.shareName.value!!, editTextShareName)
 
         resetOnEdit("Hostname", editTextHostName, viewModel.hostname)
         resetOnEdit("Workgroup", editTextWorkgroup, viewModel.workgroup)
@@ -104,7 +114,7 @@ class ConfigurationActivity : AppCompatActivity(), DatePickingDialog.OnValueSetL
         textViewStartSyncDate.setOnClickListener {
             Log.d(TAG, "OnClick Sync Start Date")
             var zdt = viewModel.syncStart.value!!
-            if(zdt.isEqual(ZonedDateTime.ofInstant(Instant.EPOCH, ZoneId.systemDefault())))
+            if (zdt.isEqual(ZonedDateTime.ofInstant(Instant.EPOCH, ZoneId.systemDefault())))
                 zdt = ZonedDateTime.now(ZoneId.systemDefault())
 
             val dialog = DatePickingDialog(zdt)
@@ -114,13 +124,39 @@ class ConfigurationActivity : AppCompatActivity(), DatePickingDialog.OnValueSetL
     }
 
     override fun onOptionsItemSelected(item: MenuItem) =
-        when(item.itemId) {
+        when (item.itemId) {
             android.R.id.home -> {
-                finish();
+                finish()
                 true
             }
             else -> super.onOptionsItemSelected(item)
         }
+
+    private fun stopPeriodicFileChecker() {
+        val wm = WorkManager.getInstance(applicationContext)
+        wm.cancelUniqueWork(FileCheckWorker.CHECKER_TAG)
+        wm.cancelAllWorkByTag(FileCheckWorker.CHECKER_TAG) //to also cancel manually triggered work
+        wm.cancelAllWorkByTag(SMBTransferWorker.UPLOAD_TAG) // also cancel uploads
+    }
+
+    private fun startPeriodicFileChecker() {
+        //Create the upload worker
+        val work = PeriodicWorkRequestBuilder<FileCheckWorker>(1, TimeUnit.DAYS)
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.UNMETERED)
+                    .setRequiresCharging(true)
+                    .build()
+            )
+            .addTag(FileCheckWorker.CHECKER_TAG)
+            .build()
+        WorkManager.getInstance(applicationContext)
+            .enqueueUniquePeriodicWork(
+                FileCheckWorker.CHECKER_TAG,
+                ExistingPeriodicWorkPolicy.REPLACE,
+                work
+            )
+    }
 
     override fun newDateValue(dialog: DialogFragment, year: Int, month: Int, dayOfMonth: Int) {
         Log.d(TAG, "Received new Date picked by user")
@@ -130,7 +166,7 @@ class ConfigurationActivity : AppCompatActivity(), DatePickingDialog.OnValueSetL
     private fun resetOnEdit(fieldName: String, field: EditText, model: MutableLiveData<String>) {
         field.doAfterTextChanged {
             Log.d(TAG, "doAfterTextChanged for $fieldName")
-            if(it.toString() != model.value!!) {
+            if (it.toString() != model.value!!) {
                 val currentVal = model.value!!
                 val newValue = it.toString()
                 Log.i(TAG, "Received new $fieldName; Changing from '$currentVal' to '$newValue'")
@@ -140,16 +176,18 @@ class ConfigurationActivity : AppCompatActivity(), DatePickingDialog.OnValueSetL
         }
     }
 
-    private fun <T : CharSequence> initFieldWith(fieldName: String, value: T, defaultStringId: Int, field : TextView) {
+    private fun <T : CharSequence> initFieldWith(
+        fieldName: String,
+        value: T,
+        field: TextView
+    ) {
         Log.d(TAG, "Initializing $fieldName")
-        field.text = value.ifEmpty {
-            getString(defaultStringId)
-        }
+        field.text = value
     }
 }
 
 class DatePickingDialog(
-    private val zdt : ZonedDateTime
+    private val zdt: ZonedDateTime
 ) : DialogFragment(), DatePickerDialog.OnDateSetListener {
 
     private lateinit var listener: OnValueSetListener
@@ -160,7 +198,7 @@ class DatePickingDialog(
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         return activity?.let {
-            DatePickerDialog(it, this, zdt.year, zdt.monthValue-1, zdt.dayOfMonth)
+            DatePickerDialog(it, this, zdt.year, zdt.monthValue - 1, zdt.dayOfMonth)
         } ?: throw IllegalStateException("Activity can't be null!")
     }
 
@@ -169,12 +207,12 @@ class DatePickingDialog(
 
         try {
             listener = context as OnValueSetListener
-        } catch (ex : ClassCastException) {
+        } catch (ex: ClassCastException) {
             throw IllegalStateException("$context must implement Listener!")
         }
     }
 
     override fun onDateSet(view: DatePicker?, year: Int, month: Int, dayOfMonth: Int) {
-        listener.newDateValue(this, year, month+1, dayOfMonth)
+        listener.newDateValue(this, year, month + 1, dayOfMonth)
     }
 }

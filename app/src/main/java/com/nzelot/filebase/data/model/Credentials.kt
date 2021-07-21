@@ -24,4 +24,10 @@ data class Credentials(
         result = 31 * result + domain.hashCode()
         return result
     }
+
+    override fun toString(): String {
+        return "Credentials(username='$username', password=*******, domain='$domain')"
+    }
+
+
 }

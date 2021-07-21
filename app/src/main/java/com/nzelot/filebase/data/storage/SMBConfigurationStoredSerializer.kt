@@ -1,5 +1,6 @@
 package com.nzelot.filebase.data.storage
 
+import android.util.Log
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.Serializer
 import com.google.protobuf.InvalidProtocolBufferException
@@ -7,6 +8,8 @@ import com.nzelot.filebase.crypto.Crypto
 import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Inject
+
+const val TAG = "com.nzelot.filebase.SMBConfigurationSerializer"
 
 class SMBConfigurationStoredSerializer @Inject constructor(
     private val crypto: Crypto
@@ -24,6 +27,7 @@ class SMBConfigurationStoredSerializer @Inject constructor(
     }
 
     override suspend fun writeTo(t: SMBConfigurationStored, output: OutputStream) {
+        Log.d(TAG, "Writing crypted SMB data.")
         val dataToStore = t.toByteArray()
         crypto.encrypt(dataToStore, output)
     }

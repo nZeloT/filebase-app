@@ -6,6 +6,8 @@ import com.nzelot.filebase.data.model.StatusLogSeverity
 import java.time.ZonedDateTime
 import javax.inject.Inject
 
+private const val TAG = "com.nzelot.filebase.StatusLogRepository"
+
 class StatusLogRepository @Inject constructor(
     statusDb : StatusLogDatabase
 ) {
@@ -22,6 +24,11 @@ class StatusLogRepository @Inject constructor(
     fun info(tag: String, msg : String) {
         Log.i(tag, msg)
         statusLogDao.insertAll(StatusLogEntry(0, ZonedDateTime.now().toEpochSecond(), StatusLogSeverity.INFO, msg))
+    }
+
+    fun clear() {
+        Log.i(TAG, "Clearing Log DB")
+        statusLogDao.clearLogs()
     }
 
 }
