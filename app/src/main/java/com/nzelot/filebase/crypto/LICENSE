@@ -1,0 +1,9 @@
+Code within the crypto package is taken from https://github.com/StylingAndroid/DataStore
+Only minor changes were made when needed due to API changes.
+The original author indicates an
+    Apache-2.0 License
+for this code.
+My changes are to subtle to allow an indication of another license.
+
+So code within this package will stay under
+    Apache-2.0 License.
