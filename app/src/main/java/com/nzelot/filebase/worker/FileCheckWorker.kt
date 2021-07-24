@@ -35,14 +35,19 @@ class FileCheckWorker @AssistedInject constructor(
 ) : Worker(appContext, workerParameters) {
 
     override fun doWork(): Result {
-        log.info(TAG, "Starting FileChecker ...")
+        log.info(
+            TAG,
+            "Start FileChecker at ${
+                ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            }"
+        )
         if (isSMBShareAvailable()) {
             log.info(TAG, "Share is available.")
 
-            if(getIsSyncOngoing()){
+            if (getIsSyncOngoing()) {
                 log.info(TAG, "There is a parallel sync ongoing; Stopping this one;")
                 return Result.success()
-            }else{
+            } else {
                 setSyncOngoing(true)
             }
 
@@ -55,12 +60,14 @@ class FileCheckWorker @AssistedInject constructor(
             val newMediaName = newMedia.map { it.name }.toTypedArray()
 
             val zdt = ZonedDateTime.now(ZoneId.systemDefault())
-            log.info(TAG, "Scheduling ${newMedia.size} new Files for Upload.")
-            log.info(TAG,  "Last Sync Time is now ${
-                zdt.format(
-                    DateTimeFormatter.ISO_INSTANT
-                )
-            }")
+            log.info(TAG, "Found ${newMedia.size} new Media Files.")
+            log.info(
+                TAG, "Last Sync Time is now ${
+                    zdt.format(
+                        DateTimeFormatter.ISO_OFFSET_DATE_TIME
+                    )
+                }"
+            )
 
             smbStateRepository.updateLastSyncDate(zdt)
 
@@ -87,9 +94,16 @@ class FileCheckWorker @AssistedInject constructor(
             }
 
             setSyncOngoing(false)
-        }else{
+        } else {
             log.error(TAG, "Share is not available; Quitting;")
         }
+
+        log.info(
+            TAG,
+            "Finished FileChecker at ${
+                ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            }"
+        )
 
         return Result.success()
     }
@@ -108,13 +122,13 @@ class FileCheckWorker @AssistedInject constructor(
         }
     }
 
-    private fun getIsSyncOngoing() : Boolean {
+    private fun getIsSyncOngoing(): Boolean {
         return runBlocking {
             smbStateRepository.isSyncOngoing.first()
         }
     }
 
-    private fun setSyncOngoing(isOngoing : Boolean) {
+    private fun setSyncOngoing(isOngoing: Boolean) {
         smbStateRepository.updateIsSyncOngoing(isOngoing)
     }
 

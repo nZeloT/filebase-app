@@ -10,12 +10,15 @@ import javax.inject.Inject
 @HiltAndroidApp
 class FileBaseApplication : Application(), Configuration.Provider {
 
-    @Inject lateinit var workerFactory : HiltWorkerFactory
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
 
-    override fun getWorkManagerConfiguration() : Configuration =
+    override fun getWorkManagerConfiguration(): Configuration =
         Configuration.Builder()
             .setWorkerFactory(workerFactory)
+            .setMinimumLoggingLevel(android.util.Log.DEBUG)
             .build()
+
 }
 
 //TODO: initially enter config page on application first start

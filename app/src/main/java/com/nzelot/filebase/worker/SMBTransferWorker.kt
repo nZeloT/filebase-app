@@ -19,6 +19,7 @@ import dagger.assisted.AssistedInject
 import java.io.IOException
 import java.io.InputStream
 import java.time.LocalDateTime
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -35,18 +36,23 @@ const val INPUT_UPLOAD_ATTEMPT = "INPUT_UPLOAD_ATTEMPT"
 class SMBTransferWorker @AssistedInject constructor(
     @Assisted appContext: Context, @Assisted workerParameters: WorkerParameters,
     private val smbConfigurationRepository: SMBConfigurationRepository,
-    private val log : StatusLogRepository
-) : Worker(appContext, workerParameters){
+    private val log: StatusLogRepository
+) : Worker(appContext, workerParameters) {
 
     override fun doWork(): Result {
-        log.info(TAG, "Starting Upload ...")
+        log.info(
+            TAG,
+            "Start Upload at ${
+                ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            }"
+        )
         val urisToUpload = inputData.getStringArray(INPUT_URI_ARR)!!
         val nameToUpload = inputData.getStringArray(INPUT_NAME_VAL)!!
         val uploadAttempt = inputData.getInt(INPUT_UPLOAD_ATTEMPT, 0)
 
         if (BuildConfig.DEBUG && urisToUpload.size != nameToUpload.size) {
-            log.error(TAG, "Mismatch between Uris and MimeType!!")
-            error("Mismatch between Uris and MimeType!")
+            log.error(TAG, "Mismatch between Uris and names!!")
+            error("Mismatch between Uris and Names!")
         }
 
 
@@ -60,7 +66,7 @@ class SMBTransferWorker @AssistedInject constructor(
             log.info(TAG, "Connected to share. Starting upload ...")
 
             //check that destination directory exists
-            if(!diskShare.folderExists(FILE_BASE_ROOT)){
+            if (!diskShare.folderExists(FILE_BASE_ROOT)) {
                 diskShare.mkdir(FILE_BASE_ROOT)
             }
 
@@ -72,7 +78,11 @@ class SMBTransferWorker @AssistedInject constructor(
                         r.data
                     }
                     is com.nzelot.filebase.data.Result.Error -> {
-                        log.error(TAG, "Received a read error on local file; will skip;", r.exception)
+                        log.error(
+                            TAG,
+                            "Received a read error on local file; will skip;",
+                            r.exception
+                        )
                         ++lastSuccessfulIdx
                         continue
                     }
@@ -113,9 +123,11 @@ class SMBTransferWorker @AssistedInject constructor(
 
                 //we missed some files; reschedule the missed ones
                 val missedUris =
-                    urisToUpload.slice(IntRange(lastSuccessfulIdx + 1, urisToUpload.size - 1)).toTypedArray()
+                    urisToUpload.slice(IntRange(lastSuccessfulIdx + 1, urisToUpload.size - 1))
+                        .toTypedArray()
                 val missedMime =
-                    nameToUpload.slice(IntRange(lastSuccessfulIdx + 1, nameToUpload.size - 1)).toTypedArray()
+                    nameToUpload.slice(IntRange(lastSuccessfulIdx + 1, nameToUpload.size - 1))
+                        .toTypedArray()
                 val nextUploadAttempt = uploadAttempt + 1
 
                 val inputData = Data.Builder()
@@ -136,36 +148,44 @@ class SMBTransferWorker @AssistedInject constructor(
                     .addTag(UPLOAD_TAG)
                     .build()
 
-                log.info(TAG, "Missed to upload ${missedUris.size} of initially ${urisToUpload.size}; Requeueing with for attempt $nextUploadAttempt")
+                log.info(
+                    TAG,
+                    "Missed to upload ${missedUris.size} of initially ${urisToUpload.size}; Requeueing with for attempt $nextUploadAttempt"
+                )
                 WorkManager.getInstance(applicationContext).enqueue(work)
             }
         }
 
-        log.info(TAG, "Closing upload worker")
+        log.info(
+            TAG,
+            "Finished upload at ${
+                ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            }"
+        )
         return Result.success()
     }
 
-    private fun readLocalMediaFile(uri: String) : com.nzelot.filebase.data.Result<ByteArray> {
-        var inputStream : InputStream? = null
+    private fun readLocalMediaFile(uri: String): com.nzelot.filebase.data.Result<ByteArray> {
+        var inputStream: InputStream? = null
         return try {
             inputStream = applicationContext.contentResolver.openInputStream(Uri.parse(uri))
-            if(inputStream != null) {
+            if (inputStream != null) {
                 com.nzelot.filebase.data.Result.Success(inputStream.readBytes())
-            }else{
+            } else {
                 com.nzelot.filebase.data.Result.Error(NullPointerException("Received InputStream == null!"))
             }
-        }catch(ex : IOException) {
+        } catch (ex: IOException) {
             com.nzelot.filebase.data.Result.Error(ex)
-        }finally {
+        } finally {
             inputStream?.close()
         }
     }
 
-    private fun getShareConfiguration() : SMBConfiguration {
+    private fun getShareConfiguration(): SMBConfiguration {
         return smbConfigurationRepository.config
     }
 
-    companion object{
+    companion object {
         val UPLOAD_TAG = "FilebaseUploadWork"
     }
 
